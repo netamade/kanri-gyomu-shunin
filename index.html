@@ -281,8 +281,16 @@ function fieldCornerHtml(stats) {
 // ===== 一問一答（記録は画面内のみ） =====
 let ichi = null; // { q, i, ans }
 const ichiScore = { n: 0, ok: 0 };
+// 個数問題・組み合わせ問題は、肢を単独の文として提示しても正誤を判断できないため出題候補から除外する。
+// 判定はデータの実態に合わせ「4肢すべてが個数表現（例：1つ／二つ）または記号の組み合わせ列挙（例：アとウ／ア・イ）」のとき。
+const ICHI_COUNT_RE = /^\s*[0-9０-９一二三四五]\s*(つ|個)\s*$/;
+const ICHI_COMBO_RE = /^\s*[ア-オ](\s*(と|・|、|及び)\s*[ア-オ])+\s*$/;
+function isCountOrComboQuestion(q) {
+  return q.options.every((o) => ICHI_COUNT_RE.test(o)) || q.options.every((o) => ICHI_COMBO_RE.test(o));
+}
+const ICHI_POOL = ALL_QUESTIONS.filter((q) => !isCountOrComboQuestion(q));
 function newIchi() {
-  const q = ALL_QUESTIONS[Math.floor(Math.random() * ALL_QUESTIONS.length)];
+  const q = ICHI_POOL[Math.floor(Math.random() * ICHI_POOL.length)];
   ichi = { q, i: Math.floor(Math.random() * q.options.length), ans: null };
 }
 function ichiInner() {
@@ -306,7 +314,7 @@ function ichiInner() {
   return h;
 }
 function ichiHtml() {
-  return "<div class='card'><h2>一問一答コーナー</h2><div class='meta'>収録問題の選択肢から1つをランダムに出題します。その文が正しいか○×で答えましょう（「誤っているもの」を選ぶ問題の正解肢は×になります）。</div><div id='ichi'>" + ichiInner() + "</div></div>";
+  return "<div class='card'><h2>一問一答コーナー</h2><div class='meta'>収録問題の選択肢から1つをランダムに出題します。その文が正しいか○×で答えましょう（「誤っているもの」を選ぶ問題の正解肢は×になります）。個数問題・組み合わせ問題は除いた " + ICHI_POOL.length + "問から出題します。</div><div id='ichi'>" + ichiInner() + "</div></div>";
 }
 function refreshIchi() { const el = document.getElementById("ichi"); if (el) el.innerHTML = ichiInner(); }
 
