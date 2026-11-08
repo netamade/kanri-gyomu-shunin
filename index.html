@@ -281,17 +281,36 @@ function fieldCornerHtml(stats) {
 // ===== 一問一答（記録は画面内のみ） =====
 let ichi = null; // { q, i, ans }
 const ichiScore = { n: 0, ok: 0 };
-// 個数問題・組み合わせ問題は、肢を単独の文として提示しても正誤を判断できないため出題候補から除外する。
-// 判定はデータの実態に合わせ「4肢すべてが個数表現（例：1つ／二つ）または記号の組み合わせ列挙（例：アとウ／ア・イ）」のとき。
+// 個数問題・組み合わせ問題・計算問題は、肢を単独の文として提示しても正誤を判断できないため出題候補から除外する。
+// 判定はデータの実態に合わせ、4肢すべてが次のいずれか同じ形のとき（一部の肢だけ一致する問題は除外しない）。
+//   個数表現（例：1つ／二つ）、記号の組み合わせ列挙（例：アとウ／ア・イ）、
+//   計算結果の数値（先頭12字以内に金額・割合・面積の数値。例：A：320,000円／未収管理費：80万円、…／1戸当たり月額4,966円）
 const ICHI_COUNT_RE = /^\s*[0-9０-９一二三四五]\s*(つ|個)\s*$/;
 const ICHI_COMBO_RE = /^\s*[ア-オ](\s*(と|・|、|及び)\s*[ア-オ])+\s*$/;
-function isCountOrComboQuestion(q) {
-  return q.options.every((o) => ICHI_COUNT_RE.test(o)) || q.options.every((o) => ICHI_COMBO_RE.test(o));
+const ICHI_CALC_RE = /^\s*[^。]{0,12}?[0-9０-９][0-9０-９,，.．]*\s*(万円|円|％|%|㎡|平方メートル|割)/;
+function isUnsuitableForIchi(q) {
+  return [ICHI_COUNT_RE, ICHI_COMBO_RE, ICHI_CALC_RE].some((re) => q.options.every((o) => re.test(o)));
 }
-const ICHI_POOL = ALL_QUESTIONS.filter((q) => !isCountOrComboQuestion(q));
+const ICHI_POOL = ALL_QUESTIONS.filter((q) => !isUnsuitableForIchi(q));
+// 出題順は「重複なしシャッフル」：プール全問をシャッフルした山から1問ずつ出し、尽きたら再シャッフルする。
+// これにより1周するまで同じ問題は出ない。再シャッフル直後の先頭が直前の問題と同じなら、山の中の別の問題と入れ替える。
+let ichiDeck = [];      // 未出題の山（先頭＝次に出す問題）
+let ichiLastId = null;  // 直前に出した問題のID
+function drawIchiQuestion() {
+  if (!ichiDeck.length) {
+    ichiDeck = shuffle(ICHI_POOL.slice());
+    if (ichiDeck.length > 1 && ichiDeck[0].id === ichiLastId) {
+      const j = 1 + Math.floor(Math.random() * (ichiDeck.length - 1));
+      [ichiDeck[0], ichiDeck[j]] = [ichiDeck[j], ichiDeck[0]];
+    }
+  }
+  const q = ichiDeck.shift();
+  ichiLastId = q.id;
+  return q;
+}
 function newIchi() {
-  const q = ICHI_POOL[Math.floor(Math.random() * ICHI_POOL.length)];
-  ichi = { q, i: Math.floor(Math.random() * q.options.length), ans: null };
+  const q = drawIchiQuestion();
+  ichi = { q, i: Math.floor(Math.random() * q.options.length), ans: null }; // 提示する肢は従来どおりランダム
 }
 function ichiInner() {
   if (!ichi) newIchi();
@@ -314,7 +333,7 @@ function ichiInner() {
   return h;
 }
 function ichiHtml() {
-  return "<div class='card'><h2>一問一答コーナー</h2><div class='meta'>収録問題の選択肢から1つをランダムに出題します。その文が正しいか○×で答えましょう（「誤っているもの」を選ぶ問題の正解肢は×になります）。個数問題・組み合わせ問題は除いた " + ICHI_POOL.length + "問から出題します。</div><div id='ichi'>" + ichiInner() + "</div></div>";
+  return "<div class='card'><h2>一問一答コーナー</h2><div class='meta'>収録問題の選択肢から1つをランダムに出題します。その文が正しいか○×で答えましょう（「誤っているもの」を選ぶ問題の正解肢は×になります）。個数問題・組み合わせ問題・計算問題は除いた " + ICHI_POOL.length + "問から出題します。</div><div id='ichi'>" + ichiInner() + "</div></div>";
 }
 function refreshIchi() { const el = document.getElementById("ichi"); if (el) el.innerHTML = ichiInner(); }
 
